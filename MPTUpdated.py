@@ -5,7 +5,9 @@ import yfinance as yf
 import matplotlib.pyplot as plt
 import seaborn as sns
 import statsmodels.api as sm
-import pandas_datareader.data as web
+import requests
+import zipfile
+import io as _io
 
 
 def run_mpt_simulation(tickers, start_date, end_date, num_simulations, risk_free_rate):
@@ -135,8 +137,21 @@ if run_button:
             "This analysis shows how much of your portfolio's performance can be explained by common market risk factors (Market, Size, Value).")
 
         with st.spinner("Downloading Fama-French data..."):
-            ff_factors = web.DataReader('F-F_Research_Data_Factors_daily', 'famafrench', start=start_date)[0]
+            ff_url = "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/ftp/F-F_Research_Data_Factors_daily_CSV.zip"
+            r = requests.get(ff_url, timeout=30)
+            z = zipfile.ZipFile(_io.BytesIO(r.content))
+            csv_name = [n for n in z.namelist() if n.endswith('.CSV') or n.endswith('.csv')][0]
+            with z.open(csv_name) as f:
+                raw = f.read().decode('utf-8')
+            lines = raw.split('\n')
+            start_idx = next(i for i, l in enumerate(lines) if l.strip().startswith('19') or l.strip().startswith('20'))
+            end_idx = next((i for i, l in enumerate(lines) if i > start_idx and l.strip() == ''), len(lines))
+            ff_csv = '\n'.join(lines[start_idx:end_idx])
+            ff_factors = pd.read_csv(_io.StringIO(ff_csv), index_col=0)
+            ff_factors.index = pd.to_datetime(ff_factors.index, format='%Y%m%d')
+            ff_factors.columns = [c.strip() for c in ff_factors.columns]
             ff_factors = ff_factors / 100
+            ff_factors = ff_factors[ff_factors.index >= pd.to_datetime(start_date)]
 
             portfolio_weights = max_sharpe_portfolio.drop(['Return', 'Volatility', 'Sharpe'])
             portfolio_returns = (returns * portfolio_weights).sum(axis=1)
