@@ -144,12 +144,13 @@ if run_button:
             with z.open(csv_name) as f:
                 raw = f.read().decode('utf-8')
             lines = raw.split('\n')
-            start_idx = next(i for i, l in enumerate(lines) if l.strip().startswith('19') or l.strip().startswith('20'))
-            end_idx = next((i for i, l in enumerate(lines) if i > start_idx and l.strip() == ''), len(lines))
-            ff_csv = '\n'.join(lines[start_idx:end_idx])
+            header_idx = next(i for i, l in enumerate(lines) if 'Mkt-RF' in l)
+            end_idx = next((i for i, l in enumerate(lines) if i > header_idx + 1 and l.strip() == ''), len(lines))
+            ff_csv = '\n'.join(lines[header_idx:end_idx])
             ff_factors = pd.read_csv(_io.StringIO(ff_csv), index_col=0)
-            ff_factors.index = pd.to_datetime(ff_factors.index, format='%Y%m%d')
+            ff_factors.index = pd.to_datetime(ff_factors.index.astype(str).str.strip(), format='%Y%m%d', errors='coerce')
             ff_factors.columns = [c.strip() for c in ff_factors.columns]
+            ff_factors = ff_factors.apply(pd.to_numeric, errors='coerce').dropna()
             ff_factors = ff_factors / 100
             ff_factors = ff_factors[ff_factors.index >= pd.to_datetime(start_date)]
 
